@@ -1,0 +1,144 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  tobita-weather-sam-application
+
+  Sample SAM Template for tobita-weather-sam-application
+
+Parameters:
+  BucketTargetName:
+    Description: Type of this BacketName.
+    Type: String
+  TwitterAppKey:
+    Description: Type of this BacketName.
+    Type: String
+  TwitterAppSecret:
+    Description: Type of this BacketName.
+    Type: String
+  TwitterAccessToken:
+    Description: Type of this BacketName.
+    Type: String
+  TwitterAccessSecret:
+    Description: Type of this BacketName.
+    Type: String
+  JmaZoom:
+    Description: Type of this BacketName.
+    Type: String
+  JmaLat:
+    Description: Type of this BacketName.
+    Type: String
+  JmaLon:
+    Description: Type of this BacketName.
+    Type: String
+  JmaColorDepth:
+    Description: Type of this BacketName.
+    Type: String
+  JmaElements:
+    Description: Type of this BacketName.
+    Type: String
+
+Globals:
+  Function:
+    Timeout: 30
+    Environment:
+      Variables:
+        TZ: Asia/Tokyo
+        ENV_TWITTER_APP_KEY: !Sub ${TwitterAppKey}
+        ENV_TWITTER_APP_SECRET: !Sub ${TwitterAppSecret}
+        ENV_TWITTER_ACCESS_TOKEN: !Sub ${TwitterAccessToken}
+        ENV_TWITTER_ACCESS_SECRET: !Sub ${TwitterAccessSecret}
+        ENV_JMA_ZOOM: !Sub ${JmaZoom}
+        ENV_JMA_LAT: !Sub ${JmaLat}
+        ENV_JMA_LON: !Sub ${JmaLon}
+        ENV_JMA_COLORDEPTH: !Sub ${JmaColorDepth}
+        ENV_JMA_ELEMENTS: !Sub ${JmaElements}
+
+Resources:
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${BucketTargetName}
+      AccessControl: Private
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - "*"
+            AllowedMethods:
+              - "GET"
+            AllowedOrigins:
+              - "https://tobitamap.pages.dev"
+              - "http://localhost:5173"
+              - "https://tobitamap.pages.dev/*"
+              - "http://localhost:5173/*"
+  S3BucketPolicy:
+    Type: "AWS::S3::BucketPolicy"
+    Properties:
+      Bucket: !Ref S3Bucket
+      PolicyDocument:
+        Statement:
+          Action:
+            - "s3:GetObject"
+          Effect: "Allow"
+          Resource: !Sub "arn:aws:s3:::${BucketTargetName}/*"
+          Principal: "*"
+
+  WeatherCollectorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: tobita-weather-collector/
+      Handler: app.lambdaHandler
+      Runtime: nodejs14.x
+      Environment:
+        Variables:
+          BUCKET_NAME: !Sub ${BucketTargetName}
+      Policies:
+        - S3FullAccessPolicy:
+            BucketName: !Sub ${BucketTargetName}
+      Events:
+        ScheduleExecute:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0/10 * * * ? *)
+
+  MyLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      Description: Layer description
+      ContentUri: "layer/chrome_aws_lambda.zip"
+      CompatibleRuntimes:
+        - nodejs14.x
+
+  NowCastFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: tobita-nowcast-notice/
+      Handler: app.lambdaHandler
+      Runtime: nodejs14.x
+      MemorySize: 1024
+      Timeout: 45
+      Layers:
+        - !Ref MyLayer
+      Environment:
+        Variables:
+          BUCKET_NAME: !Sub ${BucketTargetName}
+      Policies:
+        - S3FullAccessPolicy:
+            BucketName: !Sub ${BucketTargetName}
+      Events:
+        NowCastScheduleExecute:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 * * * ? *)
+
+  NowcastAnalyse:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: tobita-nowcast-analyse/
+      Handler: app.lambda_handler
+      Runtime: python3.8
+      Environment:
+        Variables:
+          BUCKET_NAME: !Sub ${BucketTargetName}
+      Policies:
+        - S3FullAccessPolicy:
+            BucketName: !Sub ${BucketTargetName}
