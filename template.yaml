@@ -9,6 +9,10 @@ Parameters:
   BucketTargetName:
     Description: Type of this BacketName.
     Type: String
+  AnalyseLambdaFunctionName:
+    Description: Type of this BacketName.
+    Type: String
+    Default: "lambda-nowcast-analyse-function"
   TwitterAppKey:
     Description: Type of this BacketName.
     Type: String
@@ -121,9 +125,12 @@ Resources:
       Environment:
         Variables:
           BUCKET_NAME: !Sub ${BucketTargetName}
+          ANALYSE_FUNCTION_NAME: !Sub ${AnalyseLambdaFunctionName}
       Policies:
         - S3FullAccessPolicy:
             BucketName: !Sub ${BucketTargetName}
+        - LambdaInvokePolicy:
+            FunctionName: !Sub ${AnalyseLambdaFunctionName}
       Events:
         NowCastScheduleExecute:
           Type: Schedule
@@ -133,6 +140,7 @@ Resources:
   NowcastAnalyse:
     Type: AWS::Serverless::Function
     Properties:
+      FunctionName: !Sub ${AnalyseLambdaFunctionName}
       CodeUri: tobita-nowcast-analyse/
       Handler: app.lambda_handler
       Runtime: python3.8

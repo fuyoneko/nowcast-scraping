@@ -1,4 +1,5 @@
 const { S3Client, GetObjectCommand } = require("@aws-sdk/client-s3");
+const { LambdaClient, InvokeAsyncCommand } = require("@aws-sdk/client-lambda");
 const fetch = require("node-fetch");
 const Chromium = require("chrome-aws-lambda");
 const GIFEncoder = require("gifencoder");
@@ -7,6 +8,7 @@ const fs = require("fs");
 const { TwitterApi } = require("twitter-api-v2");
 
 const s3Client = new S3Client({ region: "ap-northeast-1" });
+const lambdaClient = new LambdaClient({ region: "ap-northeast-1" });
 
 class NowcastControl {
   /**
@@ -43,6 +45,7 @@ class NowcastControl {
 
     document.querySelector(".leaflet-top.leaflet-left").style.display = "none";
     document.querySelector(".jmatile-map-legend").style.display = "none";
+    document.querySelector(".jmatile-map-legend-button").style.display = "none";
   }
 
   async decodeFile(filename) {
@@ -69,6 +72,8 @@ class NowcastControl {
     const clipWidth = 700;
     const clipYOffset = 214;
     const uploadMediaPath = "/tmp/exportdata.gif";
+    const resultsData = [];
+    let replyToId = "";
 
     const browser = await Chromium.puppeteer.launch({
       args: Chromium.args,
@@ -142,6 +147,145 @@ class NowcastControl {
         // ---------------
         const png = await this.decodeBinary(new PNG(buffer));
         const clipHeight = viewWidth - clipYOffset;
+
+        // -------------
+
+        const fill = {
+          minX: 10,
+          minY: 90,
+          maxX: clipWidth - 10,
+          maxY: viewHeight - clipYOffset - 35,
+        };
+        const clip = {
+          w: 8,
+          h: 8,
+        };
+        const colorChart = [
+          0xf5f5ff, 0xb8ddff, 0x58a9ff, 0x4070ff, 0xfff740, 0xffb240, 0xff5e40,
+          0xc7408e,
+        ];
+        const positionToIndex = (x, y) => {
+          // XYをインデックスに変換する
+          let idx = x * 4;
+          idx += clipWidth * 4 * y;
+          return idx;
+        };
+        const findChartIndex = (chart, r, g, b) => {
+          const cdelta = Math.max(r, g, b) - Math.min(r, g, b);
+          let index = -1;
+          if (cdelta >= 8) {
+            let lenMin = Number.MAX_VALUE;
+            for (const idx in chart) {
+              const c = chart[idx];
+              const cr = (c >>> 16) & 0xff;
+              const cg = (c >>> 8) & 0xff;
+              const cb = c & 0xff;
+              const len =
+                Math.pow(r - cr, 2) + Math.pow(b - cb, 2) + Math.pow(g - cg, 2);
+              if (lenMin > len) {
+                lenMin = len;
+                index = idx;
+              }
+            }
+          }
+          return {
+            enabled: index != -1 ? true : false,
+            weight: index != -1 ? 1 : 0,
+            index: `${index}`,
+          };
+        };
+        const colorList = [];
+        const indexList = {};
+        const placeStatusList = {};
+        for (const idx in colorChart) {
+          indexList[`${idx}`] = 0;
+        }
+        // 評価座標の色を取得する
+        for (let x = fill.minX; x < fill.maxX; x += clip.w) {
+          for (let y = fill.minY; y < fill.maxY; y += clip.h) {
+            // XYをインデックスに変換する
+            const idx = positionToIndex(x + clip.w / 2, y + clip.h / 2);
+            // 評価点の色を取得する
+            const colorIndex = findChartIndex(
+              colorChart,
+              png[idx],
+              png[idx + 1],
+              png[idx + 2]
+            );
+            colorList.push(colorIndex.weight);
+            if (colorIndex.enabled) {
+              if (colorIndex.index in indexList) {
+                indexList[colorIndex.index] += 1;
+              }
+            }
+          }
+        }
+        const sum = colorList.reduce((p, c) => p + c);
+        let density = new Number(0);
+        if (colorList.length >= 1) {
+          density = new Number(sum / colorList.length);
+        }
+        // 評価地点の色を取得する
+        const targetPlace = [
+          {
+            key: "tobita",
+            x: 375,
+            y: 262,
+          },
+          {
+            key: "umeda",
+            x: 372,
+            y: 212,
+          },
+          {
+            key: "kadoma",
+            x: 236,
+            y: 177,
+          },
+          {
+            key: "sakai",
+            x: 360,
+            y: 325,
+          },
+          {
+            key: "yao",
+            x: 447,
+            y: 278,
+          },
+          {
+            key: "kanku",
+            x: 180,
+            y: 447,
+          },
+        ];
+
+        for (const placeInfo of targetPlace) {
+          // XYをインデックスに変換する
+          const idx = positionToIndex(placeInfo.x, placeInfo.y);
+          // 評価点の色を取得する
+          const colorIndex = findChartIndex(
+            colorChart,
+            png[idx],
+            png[idx + 1],
+            png[idx + 2]
+          );
+          placeStatusList[placeInfo.key] = {
+            basement: new Number(
+              70.0 * colorIndex.weight + 30.0 * density
+            ).toFixed(2),
+            index: colorIndex.index,
+          };
+        }
+
+        // -----------------
+        resultsData.push({
+          density: new Number(density * 100).toFixed(2),
+          histgram: indexList,
+          place: placeStatusList,
+        });
+
+        // -----------------
+
         for (let x = 0; x < clipWidth; x++) {
           for (let y = 0; y < clipHeight; y++) {
             let idx = x * 4;
@@ -173,7 +317,12 @@ class NowcastControl {
       // You can upload media easily!
       const mediaId = await twitterClient.v1.uploadMedia(uploadMediaPath);
       // Play with the built in methods
-      await twitterClient.v1.tweet(template, { media_ids: [mediaId] });
+      const result = await twitterClient.v1.tweet(template, {
+        media_ids: [mediaId],
+      });
+      // Send
+      console.log(result.id_str);
+      replyToId = result.id_str;
       // Done
       console.log("DONE");
     } catch (err) {
@@ -182,6 +331,11 @@ class NowcastControl {
     } finally {
       await browser.close();
     }
+
+    return {
+      replyTo: replyToId,
+      data: resultsData,
+    };
   }
 }
 
@@ -213,7 +367,17 @@ exports.lambdaHandler = async function (event, context) {
     }
 
     const control = new NowcastControl();
-    await control.main(template);
+    const resultData = await control.main(template);
+
+    const command = new InvokeAsyncCommand({
+      FunctionName: process.env.ANALYSE_FUNCTION_NAME,
+      InvokeArgs: JSON.stringify({
+        hour: `${new Date().getHours()}`.padStart(2, "0"),
+        replyTo: resultData.replyTo,
+        data: resultData.data,
+      }),
+    });
+    await lambdaClient.send(command);
   } catch (e) {
     console.error(e);
   }
