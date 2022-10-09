@@ -11,8 +11,6 @@ import tweepy
 font_manager.fontManager.addfont(Path(__file__).parent / "NotoSansJP-Regular.otf")
 matplotlib.rc('font', family="Noto Sans JP")
 
-INPUT_VARIABLE = '{"hour":"14","replyTo":"","data":[{"density":"93.59","histgram":{"0":476,"1":3619,"2":3,"3":172,"4":1,"5":0,"6":0,"7":25},"place":{"tobita":{"basement":"98.08","index":"1"},"umeda":{"basement":"98.08","index":"1"},"kadoma":{"basement":"98.08","index":"1"},"sakai":{"basement":"98.08","index":"3"},"yao":{"basement":"98.08","index":"1"},"kanku":{"basement":"28.08","index":"-1"}}},{"density":"93.57","histgram":{"0":481,"1":3607,"2":4,"3":169,"4":7,"5":2,"6":0,"7":25},"place":{"tobita":{"basement":"98.07","index":"3"},"umeda":{"basement":"98.07","index":"1"},"kadoma":{"basement":"98.07","index":"1"},"sakai":{"basement":"98.07","index":"3"},"yao":{"basement":"98.07","index":"1"},"kanku":{"basement":"28.07","index":"-1"}}},{"density":"93.44","histgram":{"0":475,"1":3633,"2":1,"3":151,"4":4,"5":1,"6":0,"7":24},"place":{"tobita":{"basement":"98.03","index":"3"},"umeda":{"basement":"98.03","index":"1"},"kadoma":{"basement":"98.03","index":"1"},"sakai":{"basement":"98.03","index":"3"},"yao":{"basement":"98.03","index":"1"},"kanku":{"basement":"28.03","index":"-1"}}},{"density":"93.49","histgram":{"0":488,"1":3628,"2":0,"3":149,"4":2,"5":0,"6":0,"7":24},"place":{"tobita":{"basement":"98.05","index":"3"},"umeda":{"basement":"98.05","index":"1"},"kadoma":{"basement":"98.05","index":"3"},"sakai":{"basement":"98.05","index":"3"},"yao":{"basement":"98.05","index":"1"},"kanku":{"basement":"28.05","index":"-1"}}},{"density":"93.51","histgram":{"0":491,"1":3631,"2":1,"3":143,"4":2,"5":0,"6":0,"7":24},"place":{"tobita":{"basement":"98.05","index":"1"},"umeda":{"basement":"98.05","index":"1"},"kadoma":{"basement":"98.05","index":"1"},"sakai":{"basement":"98.05","index":"1"},"yao":{"basement":"98.05","index":"1"},"kanku":{"basement":"28.05","index":"-1"}}},{"density":"93.49","histgram":{"0":481,"1":3642,"2":0,"3":143,"4":0,"5":0,"6":0,"7":25},"place":{"tobita":{"basement":"98.05","index":"1"},"umeda":{"basement":"98.05","index":"1"},"kadoma":{"basement":"98.05","index":"1"},"sakai":{"basement":"98.05","index":"1"},"yao":{"basement":"98.05","index":"1"},"kanku":{"basement":"28.05","index":"-1"}}},{"density":"93.44","histgram":{"0":487,"1":3660,"2":0,"3":118,"4":0,"5":0,"6":0,"7":24},"place":{"tobita":{"basement":"98.03","index":"1"},"umeda":{"basement":"98.03","index":"1"},"kadoma":{"basement":"98.03","index":"1"},"sakai":{"basement":"98.03","index":"3"},"yao":{"basement":"98.03","index":"1"},"kanku":{"basement":"28.03","index":"-1"}}},{"density":"93.49","histgram":{"0":491,"1":3641,"2":2,"3":133,"4":0,"5":0,"6":0,"7":24},"place":{"tobita":{"basement":"98.05","index":"1"},"umeda":{"basement":"98.05","index":"1"},"kadoma":{"basement":"98.05","index":"3"},"sakai":{"basement":"98.05","index":"1"},"yao":{"basement":"98.05","index":"1"},"kanku":{"basement":"28.05","index":"-1"}}},{"density":"93.44","histgram":{"0":483,"1":3601,"2":3,"3":178,"4":0,"5":0,"6":0,"7":24},"place":{"tobita":{"basement":"98.03","index":"1"},"umeda":{"basement":"98.03","index":"1"},"kadoma":{"basement":"98.03","index":"1"},"sakai":{"basement":"98.03","index":"1"},"yao":{"basement":"98.03","index":"1"},"kanku":{"basement":"28.03","index":"-1"}}},{"density":"93.46","histgram":{"0":491,"1":3541,"2":4,"3":229,"4":0,"5":0,"6":0,"7":25},"place":{"tobita":{"basement":"98.04","index":"1"},"umeda":{"basement":"98.04","index":"1"},"kadoma":{"basement":"98.04","index":"1"},"sakai":{"basement":"98.04","index":"1"},"yao":{"basement":"98.04","index":"3"},"kanku":{"basement":"28.04","index":"-1"}}},{"density":"93.46","histgram":{"0":496,"1":3516,"2":4,"3":250,"4":0,"5":0,"6":0,"7":24},"place":{"tobita":{"basement":"98.04","index":"1"},"umeda":{"basement":"98.04","index":"1"},"kadoma":{"basement":"98.04","index":"1"},"sakai":{"basement":"98.04","index":"1"},"yao":{"basement":"98.04","index":"3"},"kanku":{"basement":"28.04","index":"-1"}}},{"density":"93.46","histgram":{"0":502,"1":3484,"2":3,"3":277,"4":0,"5":0,"6":0,"7":24},"place":{"tobita":{"basement":"98.04","index":"1"},"umeda":{"basement":"98.04","index":"1"},"kadoma":{"basement":"98.04","index":"1"},"sakai":{"basement":"98.04","index":"1"},"yao":{"basement":"98.04","index":"3"},"kanku":{"basement":"28.04","index":"-1"}}}]}'
-
 PLACE_SET = namedtuple("PLACE_SET", ["key", "color", "display"])
 
 class Parser:
@@ -114,6 +112,7 @@ def lambda_handler(event, context):
         variable =  event
         parameter = variable["data"]
         hour = variable["hour"]
+        replyTo = variable["replyTo"]
 
         auth = tweepy.OAuth1UserHandler(
         environ.get("ENV_TWITTER_APP_KEY"),
@@ -127,23 +126,24 @@ def lambda_handler(event, context):
         media_b = execute_plot(parameter, "/tmp/area_rain.png", hour, api, figure_area_rain)
         media_c = execute_plot(parameter, "/tmp/area_histgram.png", hour, api, figure_histgram)
 
-        
-        total_densities = sum([float(p["density"]) for p in parameter])
+        densities = [float(p["density"]) for p in parameter]
+        total_densities = sum(densities)
         if total_densities == 0.0:
-            tweet_text = "ナウキャストに雨雲はありません。"
+            tweet_text = "雨雲はありません。出典:気象庁（https://www.jma.go.jp/）のナウキャストデータを解析しています。"
         else:
             tobita_max = Parser("tobita", 0, "", parameter).max
-            tweet_text = f"ナウキャストから推測される今後1時間で雨が降る確率は{tobita_max}%です。"
+            densities_max = max(densities)
+            tweet_text = f"今後1時間で飛田に雨が降る確率は{tobita_max}%、雨雲は画面の{densities_max}%を占有しています。出典:気象庁（https://www.jma.go.jp/）のナウキャストデータを解析しています。"
 
-        tweet = api.update_status(
+        api.update_status(
             status=tweet_text, 
+            in_reply_to_status_id=replyTo,
             media_ids=[
                 media_a.media_id_string, 
                 media_b.media_id_string, 
                 media_c.media_id_string
             ]
         )
-        print("TWEET: ", tweet)
 
         return {
             "statusCode": 200
