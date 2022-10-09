@@ -10,6 +10,10 @@ const { TwitterApi } = require("twitter-api-v2");
 const s3Client = new S3Client({ region: "ap-northeast-1" });
 const lambdaClient = new LambdaClient({ region: "ap-northeast-1" });
 
+const ENABLE_STATUS_UNKNOWN = 0;
+const ENABLE_STATUS_NORMAL = 1;
+const ENABLE_STATUS_RAIN = 2;
+
 class NowcastControl {
   /**
    * サービスのフォントをWebフォントに変更する
@@ -171,6 +175,13 @@ class NowcastControl {
           return idx;
         };
         const findChartIndex = (chart, r, g, b) => {
+          if (r <= 60 && g <= 60 && b <= 60) {
+            return {
+              enabled: ENABLE_STATUS_UNKNOWN,
+              weight: 0,
+              index: "-1",
+            };
+          }
           const cdelta = Math.max(r, g, b) - Math.min(r, g, b);
           let index = -1;
           if (cdelta >= 8) {
@@ -189,7 +200,7 @@ class NowcastControl {
             }
           }
           return {
-            enabled: index != -1 ? true : false,
+            enabled: index != -1 ? ENABLE_STATUS_RAIN : ENABLE_STATUS_NORMAL,
             weight: index != -1 ? 1 : 0,
             index: `${index}`,
           };
@@ -212,10 +223,12 @@ class NowcastControl {
               png[idx + 1],
               png[idx + 2]
             );
-            colorList.push(colorIndex.weight);
-            if (colorIndex.enabled) {
-              if (colorIndex.index in indexList) {
-                indexList[colorIndex.index] += 1;
+            if (colorIndex.enabled != ENABLE_STATUS_UNKNOWN) {
+              colorList.push(colorIndex.weight);
+              if (colorIndex.enabled == ENABLE_STATUS_RAIN) {
+                if (colorIndex.index in indexList) {
+                  indexList[colorIndex.index] += 1;
+                }
               }
             }
           }

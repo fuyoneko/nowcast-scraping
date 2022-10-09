@@ -1,9 +1,7 @@
-from cProfile import label
 from collections import namedtuple
 from os import environ
 import matplotlib.pyplot as plt
 from pathlib import Path
-import json
 from matplotlib import font_manager
 import matplotlib
 import tweepy
