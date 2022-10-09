@@ -110,40 +110,46 @@ def execute_plot(parameter, filename, hour, api, plotting):
 def lambda_handler(event, context):
     print("START")
     print(event)
-    variable =  json.loads(event)
-    parameter = variable["data"]
-    hour = variable["hour"]
+    try:
+        variable =  event
+        parameter = variable["data"]
+        hour = variable["hour"]
 
-    auth = tweepy.OAuth1UserHandler(
-       environ.get("ENV_TWITTER_APP_KEY"),
-       environ.get("ENV_TWITTER_APP_SECRET"),
-       environ.get("ENV_TWITTER_ACCESS_TOKEN"),
-       environ.get("ENV_TWITTER_ACCESS_SECRET")
-    )
-    api = tweepy.API(auth)
+        auth = tweepy.OAuth1UserHandler(
+        environ.get("ENV_TWITTER_APP_KEY"),
+        environ.get("ENV_TWITTER_APP_SECRET"),
+        environ.get("ENV_TWITTER_ACCESS_TOKEN"),
+        environ.get("ENV_TWITTER_ACCESS_SECRET")
+        )
+        api = tweepy.API(auth)
 
-    media_a = execute_plot(parameter, "/tmp/place_rain.png", hour, api, figure_place_rain)
-    media_b = execute_plot(parameter, "/tmp/area_rain.png", hour, figure_area_rain)
-    media_c = execute_plot(parameter, "/tmp/area_histgram.png", hour, figure_histgram)
+        media_a = execute_plot(parameter, "/tmp/place_rain.png", hour, api, figure_place_rain)
+        media_b = execute_plot(parameter, "/tmp/area_rain.png", hour, api, figure_area_rain)
+        media_c = execute_plot(parameter, "/tmp/area_histgram.png", hour, api, figure_histgram)
 
-    
-    total_densities = sum([float(p["density"]) for p in parameter])
-    if total_densities == 0.0:
-        tweet_text = "ナウキャストに雨雲はありません。"
-    else:
-        tobita_max = Parser("tobita", 0, "", parameter).max
-        tweet_text = f"ナウキャストから推測される今後1時間の降水確率は{tobita_max}%です。"
+        
+        total_densities = sum([float(p["density"]) for p in parameter])
+        if total_densities == 0.0:
+            tweet_text = "ナウキャストに雨雲はありません。"
+        else:
+            tobita_max = Parser("tobita", 0, "", parameter).max
+            tweet_text = f"ナウキャストから推測される今後1時間で雨が降る確率は{tobita_max}%です。"
 
-    tweet = api.update_status(
-        status=tweet_text, 
-        media_ids=[
-            media_a.media_id_string, 
-            media_b.media_id_string, 
-            media_c.media_id_string
-        ]
-    )
-    print("TWEET: ", tweet)
+        tweet = api.update_status(
+            status=tweet_text, 
+            media_ids=[
+                media_a.media_id_string, 
+                media_b.media_id_string, 
+                media_c.media_id_string
+            ]
+        )
+        print("TWEET: ", tweet)
 
-    return {
-        "statusCode": 200
-    }
+        return {
+            "statusCode": 200
+        }
+    except Exception as e:
+        print(e)
+        return {
+            "statusCode": 500
+        }
