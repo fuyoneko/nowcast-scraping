@@ -6,21 +6,50 @@ from matplotlib import font_manager
 import matplotlib
 import tweepy
 
+# matplotlibに日本語フォントを読み込む
 font_manager.fontManager.addfont(Path(__file__).parent / "NotoSansJP-Regular.otf")
+# フォントを設定する
 matplotlib.rc('font', family="Noto Sans JP")
 
+"""
+地点情報のラッパ（設定用）
+    @property key:
+        場所の物理名
+    @property color:
+        表示色（Integer形式）
+    @property display:
+        表示文字列
+"""
 PLACE_SET = namedtuple("PLACE_SET", ["key", "color", "display"])
 
 class Parser:
+    """
+    地点情報のラッパ（読み出し）
+    """
 
     def __init__(self, key, color, display, value) -> None:
+        """
+        コンストラクタ
+        @property key:
+            場所の物理名
+        @property color:
+            表示色（Integer形式）
+        @property display:
+            表示文字列
+        @property value:
+            Lambda実行時の入力データ
+        """
         self._key = key
         self._color = color
         self._display = display
         if value is not None:
+            # 入力データを与えられたのであれば分析する
             self._pops = self._pops_process(key, value)
 
     def _pops_process(self, key, value):
+        """
+        降水量を分析、場所にあったものを取得する
+        """
         try:
             return [float(v["place"][key]["basement"]) for v in value]
         except:
@@ -28,14 +57,23 @@ class Parser:
             
     @property
     def pops(self):
+        """
+        降水量を配列で取得する
+        """
         return self._pops
     
     @property
     def max(self):
+        """
+        降水量の期間最大値を取得する
+        """
         return max(self._pops)
 
     @property
     def color(self):
+        """
+        整数型の色情報をmatplotlib向けのタプルに変換する
+        """
         r = self._color >> 16 & 0xff
         g = self._color >> 8 & 0xff
         b = self._color & 0xff
@@ -43,9 +81,18 @@ class Parser:
     
     @property
     def display(self):
+        """
+        表示文字列を取得する
+        """
         return self._display
 
 def figure_place_rain(parameter):
+    """
+    地点の雨情報をグラフ化する
+    @property parameter:
+        Lambdaが実行時に受け取った入力
+    """
+    # 地点情報を一覧で定義する
     keysets = [ 
         # PLACE_SET("sakai", 0xA1887F, "堺市"), 
         # PLACE_SET("kadoma", 0x4DD0E1, "門真市"), 
@@ -54,20 +101,40 @@ def figure_place_rain(parameter):
         PLACE_SET("umeda", 0xE57373, "梅田駅"), 
         PLACE_SET("tobita", 0xFFD54F, "飛田新地"),
     ]
+    # 地点情報を読み出しようラッパに詰め直す
     places = [Parser(k.key, k.color, k.display, parameter) for k in keysets]
+    # Y軸の範囲を定義する
     plt.ylim(0.0, 100.0)
+    # Y軸のラベルを設定する
     plt.ylabel("5分ごとの降水確率")
+    # 折れ線グラフを出力する
     for p in places:
         plt.plot(p.pops, color= p.color, label=p.display + "の降水確率")
+    # 凡例を出力する
     plt.legend(loc='lower center', bbox_to_anchor=(.5, 1.0), ncol=3)
 
 def figure_area_rain(parameter):
+    """
+    画面上の雨雲の占有率をグラフ化する
+    @property parameter:
+        Lambdaが実行時に受け取った入力
+    """
+    # Y軸のタイトルを表示する
     plt.ylabel("雨雲の画面占有率")
+    # 雨雲の占有率を取得する
     densities = [float(p["density"]) for p in parameter]
+    # 凡例を表示する
     plt.plot(densities, "c-", label="雨雲の画面占有率")
 
 def figure_histgram(parameter):
+    """
+    ヒストグラム情報を積み上げ棒グラフで表示する
+    @property parameter:
+        Lambdaが実行時に受け取った入力
+    """
+    # Y軸のタイトルを設定する
     plt.ylabel("降水強度の占める割合")
+    # 棒グラフの色情報を設定する
     hist_points = [
         PLACE_SET("0", 0xf5f5ff, "0~1"),
         PLACE_SET("1", 0xb8ddff, "1~5"),
@@ -78,40 +145,72 @@ def figure_histgram(parameter):
         PLACE_SET("6", 0xff5e40, "50~80"),
         PLACE_SET("7", 0xc7408e, "80~"),
     ]
+    # ヒストグラムの格納先変数を設定する
+    # 積み上げ棒グラフはベースを上げた棒グラフを重ねて表現するため、
+    # 描画済み領域を覚えさせておくようにする
     histgram = {}
     bottom = [0,0,0,0,0,0,0,0,0,0,0,0]
+    # ヒストグラムを入力データから取得する
     for p in parameter:
         for hist in hist_points:
             if not (hist.key in histgram):
                 histgram[hist.key] = []
             histgram[hist.key].append(p["histgram"][hist.key])
+    # 設定した順番でグラフを積み上げていく
     for idx in [0, 1, 2, 3, 4, 5, 6, 7]:
         p = hist_points[idx]
+        # 色情報を扱うため、読み取りクラスに渡す
         ps = Parser(p.key, p.color, p.display, None)
+        # 棒グラフを描画する
         plt.bar(x=range(12), height=histgram[p.key], bottom=bottom, label=ps.display, color=[ps.color for _ in range(12)])
+        # 描画の済んだ領域は上げ底する
         for k, v in enumerate(histgram[p.key]):
             bottom[k] += v
+    # 凡例を描画する
     plt.legend(loc='lower center', bbox_to_anchor=(.5, 1.0), ncol=4)
 
 def execute_plot(parameter, filename, hour, api, plotting):
+    """
+    グラフの描画処理を実行する
+    @property parameter: dict
+        Lambdaが入力として受け取ったパラメータ
+    @property filename: str
+        ファイルパス
+    @property hour: str
+        実行時に受け取る。Lambdaの実行時間
+    @property api: Tweepy Client
+        Twitterクライアント
+    @property plotting: function
+        プロット関数
+    """
     plotting(parameter)
+    # X軸を定義する
     plt.xticks(ticks=[1,3,5,7,9,11], labels=[hour + ":00", hour + ":10", hour + ":20", hour + ":30", hour + ":40", hour + ":50"])
     plt.xlabel("時間")
+    # グラフをPNGとして保存する
     plt.savefig(filename)
     # 全てのフィギュアをクリアする
     plt.clf()
+    # グラフ画像をTwitterにアップロードする
     return api.media_upload(filename=filename)
 
 
 def lambda_handler(event, context):
+    """
+    エントリポイント
+    @property event: dict
+        Invoker Lambdaで受け取ったパラメータ
+    """
     print("START")
     print(event)
     try:
+        # 変数を取得する
         variable =  event
         parameter = variable["data"]
         hour = variable["hour"]
         replyTo = variable["replyTo"]
 
+        # Twitterクライアントを作成する
         auth = tweepy.OAuth1UserHandler(
         environ.get("ENV_TWITTER_APP_KEY"),
         environ.get("ENV_TWITTER_APP_SECRET"),
@@ -120,19 +219,26 @@ def lambda_handler(event, context):
         )
         api = tweepy.API(auth)
 
+        # グラフを作成、画像のアップロード先キーを取得する
         media_a = execute_plot(parameter, "/tmp/place_rain.png", hour, api, figure_place_rain)
         media_b = execute_plot(parameter, "/tmp/area_rain.png", hour, api, figure_area_rain)
         media_c = execute_plot(parameter, "/tmp/area_histgram.png", hour, api, figure_histgram)
 
+        # テキストデータを作成する
+        # テキストに必要な情報（雲の占有割合、短期降水確率）を取得する
         densities = [float(p["density"]) for p in parameter]
         total_densities = sum(densities)
         if total_densities == 0.0:
+            # 降水がないのであれば、それを表示する
             tweet_text = "雨雲はありません。出典:気象庁（https://www.jma.go.jp/）のナウキャストデータを解析しています。"
         else:
+            # 飛田新地上空の降水確率を取得、テキストとして出力する
             tobita_max = Parser("tobita", 0, "", parameter).max
             densities_max = max(densities)
             tweet_text = f"今後1時間で飛田に雨が降る確率は{tobita_max}%、雨雲は画面の{densities_max}%を占有しています。出典:気象庁（https://www.jma.go.jp/）のナウキャストデータを解析しています。"
 
+        # ツイートする
+        # ツイートはリプライとしてぶら下げる
         api.update_status(
             status=tweet_text, 
             in_reply_to_status_id=replyTo,
@@ -147,6 +253,7 @@ def lambda_handler(event, context):
             "statusCode": 200
         }
     except Exception as e:
+        # 処理例外を受けた場合
         print(e)
         return {
             "statusCode": 500
