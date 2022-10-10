@@ -257,8 +257,7 @@ def lambda_handler(event, context):
         s3_client =  boto3.resource("s3")
         s3_bucket = s3_client.Bucket(environ.get("BUCKET_NAME"))
         json_data = {
-            "tobita_max": tobita_max,
-            "variable": variable
+            "tobita_max": tobita_max
         }
 
         # データを出力する
