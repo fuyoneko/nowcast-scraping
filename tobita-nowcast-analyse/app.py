@@ -1,10 +1,13 @@
 from collections import namedtuple
+import json
 from os import environ
 import matplotlib.pyplot as plt
 from pathlib import Path
 from matplotlib import font_manager
 import matplotlib
 import tweepy
+import boto3
+import io
 
 # matplotlibに日本語フォントを読み込む
 font_manager.fontManager.addfont(Path(__file__).parent / "NotoSansJP-Regular.otf")
@@ -228,6 +231,7 @@ def lambda_handler(event, context):
         # テキストに必要な情報（雲の占有割合、短期降水確率）を取得する
         densities = [float(p["density"]) for p in parameter]
         total_densities = sum(densities)
+        tobita_max = 0.0
         if total_densities == 0.0:
             # 降水がないのであれば、それを表示する
             tweet_text = "雨雲はありません。出典:気象庁（https://www.jma.go.jp/）のナウキャストデータを解析しています。"
@@ -248,6 +252,18 @@ def lambda_handler(event, context):
                 media_c.media_id_string
             ]
         )
+
+        # S3に分析データをアップロードする
+        s3_client =  boto3.resource("s3")
+        s3_bucket = s3_client.Bucket(environ.get("BUCKET_NAME"))
+        json_data = {
+            "tobita_max": tobita_max,
+            "variable": variable
+        }
+
+        # データを出力する
+        with io.BytesIO(json.dumps(json_data).encode("utf-8")) as fp:
+            s3_bucket.upload_fileobj(fp, "analyse_weather.json")
 
         return {
             "statusCode": 200
