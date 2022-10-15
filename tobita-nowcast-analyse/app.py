@@ -232,12 +232,20 @@ def lambda_handler(event, context):
         densities = [float(p["density"]) for p in parameter]
         total_densities = sum(densities)
         tobita_max = 0.0
+        tobita_clouds = []
         if total_densities == 0.0:
             # 降水がないのであれば、それを表示する
             tweet_text = "雨雲はありません。出典:気象庁（https://www.jma.go.jp/）のナウキャストデータを解析しています。"
+            tobita_clouds = [
+                0.0, 0.0, 0.0, 0.0, 0,0, 
+                0.0, 0.0, 0.0, 0.0, 0.0,
+                0.0, 0.0
+            ]
         else:
             # 飛田新地上空の降水確率を取得、テキストとして出力する
-            tobita_max = Parser("tobita", 0, "", parameter).max
+            tobita_info = Parser("tobita", 0, "", parameter)
+            tobita_max = tobita_info.max
+            tobita_clouds = tobita_info.pops
             densities_max = max(densities)
             tweet_text = f"今後1時間で飛田に雨が降る確率は{tobita_max}%、雨雲は画面の{densities_max}%を占有しています。出典:気象庁（https://www.jma.go.jp/）のナウキャストデータを解析しています。"
 
@@ -257,7 +265,9 @@ def lambda_handler(event, context):
         s3_client =  boto3.resource("s3")
         s3_bucket = s3_client.Bucket(environ.get("BUCKET_NAME"))
         json_data = {
-            "tobita_max": tobita_max
+            "hour": hour,
+            "tobita_max": tobita_max,
+            "tobita_pops": tobita_clouds
         }
 
         # データを出力する
