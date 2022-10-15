@@ -1,10 +1,12 @@
 from collections import namedtuple
 import json
+from math import atan2, cos, sin
 from os import environ
 import matplotlib.pyplot as plt
 from pathlib import Path
 from matplotlib import font_manager
 import matplotlib
+from numpy import place
 import tweepy
 import boto3
 import io
@@ -172,7 +174,7 @@ def figure_histgram(parameter):
     # 凡例を描画する
     plt.legend(loc='lower center', bbox_to_anchor=(.5, 1.0), ncol=4)
 
-def execute_plot(parameter, filename, hour, api, plotting):
+def execute_plot(parameter, filename, hour, api, plotting, xlabel=True):
     """
     グラフの描画処理を実行する
     @property parameter: dict
@@ -187,15 +189,19 @@ def execute_plot(parameter, filename, hour, api, plotting):
         プロット関数
     """
     plotting(parameter)
-    # X軸を定義する
-    plt.xticks(ticks=[1,3,5,7,9,11], labels=[hour + ":00", hour + ":10", hour + ":20", hour + ":30", hour + ":40", hour + ":50"])
-    plt.xlabel("時間")
+    if xlabel:
+        # X軸を定義する
+        plt.xticks(ticks=[1,3,5,7,9,11], labels=[hour + ":00", hour + ":10", hour + ":20", hour + ":30", hour + ":40", hour + ":50"])
+        plt.xlabel("時間")
     # グラフをPNGとして保存する
     plt.savefig(filename)
     # 全てのフィギュアをクリアする
     plt.clf()
-    # グラフ画像をTwitterにアップロードする
-    return api.media_upload(filename=filename)
+    if api is not None:
+        # グラフ画像をTwitterにアップロードする
+        return api.media_upload(filename=filename)
+    else:
+        return ""
 
 
 def lambda_handler(event, context):
@@ -223,7 +229,7 @@ def lambda_handler(event, context):
         api = tweepy.API(auth)
 
         # グラフを作成、画像のアップロード先キーを取得する
-        media_a = execute_plot(parameter, "/tmp/place_rain.png", hour, api, figure_place_rain)
+        media_a = execute_plot(parameter, "/tmp/place_rain.png", hour, api, figure_place_rain_circle, xlabel=False)
         media_b = execute_plot(parameter, "/tmp/area_rain.png", hour, api, figure_area_rain)
         media_c = execute_plot(parameter, "/tmp/area_histgram.png", hour, api, figure_histgram)
 
@@ -283,3 +289,142 @@ def lambda_handler(event, context):
         return {
             "statusCode": 500
         }
+
+
+def figure_place_rain_circle(inputs):
+    """
+    地点の雨情報をグラフ化する
+    @property parameter:
+        Lambdaが実行時に受け取った入力
+    """
+    parameter = inputs["data"]
+    hour = inputs["hour"]
+    # 地点情報を一覧で定義する
+    keysets = [ 
+        PLACE_SET("tobita", 0xFFD54F, "飛田新地"),
+        PLACE_SET("umeda", 0xE57373, "梅田駅"),
+        # PLACE_SET("kanku", 0x81C784, "関西国際空港"),  
+        PLACE_SET("sakai", 0xA1887F, "堺市"), 
+        PLACE_SET("kadoma", 0x4DD0E1, "門真市"), 
+        PLACE_SET("yao", 0x9575CD, "八尾市"), 
+    ]
+    # 地点情報を読み出しようラッパに詰め直す
+    places = [Parser(k.key, k.color, k.display, parameter) for k in keysets]
+    rain = Parser("k", 0x03A9F4, "雨", None)
+    caution = Parser("k", 0xB3E5FC, "雨注意", None)
+    sunny = Parser("k", 0xFFF8E1, "降雨なし", None)
+    unknown = Parser("k", 0xccccc, "不明", None)
+    # 複数のグラフを描画するため、figを作成する
+    fig = plt.figure()
+    # 地点ごとの円グラフを描画する
+    for k, v in enumerate(places):
+        # 地点向けの円グラフを作成
+        ax = fig.add_subplot(2, 3, k + 1)
+        info = {
+            "value": [],
+            "color": [],
+            "label": []
+        }
+        DRAWING = [
+            {
+                "label": "00",
+                "index": 1
+            },
+            {
+                "label": "",
+                "index": 2
+            },
+            {
+                "label": "",
+                "index": 3
+            },
+            {
+                "label": "15",
+                "index": 4
+            },
+            {
+                "label": "",
+                "index": 5
+            },
+            {
+                "label": "",
+                "index": 6
+            },
+            {
+                "label": "30",
+                "index": 7
+            },
+            {
+                "label": "",
+                "index": 8
+            },
+            {
+                "label": "",
+                "index": 9
+            },
+            {
+                "label": "45",
+                "index": 10
+            },
+            {
+                "label": "",
+                "index": 11
+            },
+            {
+                "label": "",
+                "index": 11
+            }
+        ]
+        for di in DRAWING:
+            p = -1
+            if di["index"] < len(v.pops):
+                p = v.pops[di["index"]]
+            info["value"].append(1)
+            info["label"].append(di["label"])
+            if p >= 50.0:
+                info["color"].append(rain.color)
+            elif p >= 10.0:
+                info["color"].append(caution.color)
+            elif p == -1:
+                info["color"].append(unknown.color)
+            else:
+                info["color"].append(sunny.color)
+        _, text = ax.pie(
+            info["value"], 
+            colors=info["color"], 
+            labels=info["label"], 
+            startangle=-270, 
+            counterclock=False,
+            shadow=True,
+            wedgeprops={"edgecolor":"k",'linewidth': 1, 'antialiased': True}
+        )
+        for place, t in enumerate(text):
+            distance = 1.0
+            x, y = t.get_position()
+            angle = atan2(y, x)
+            if place == 0 or place == 6:
+                angle += (22.5 / 180) * 3.1415
+                distance = 1.15
+            else:
+                angle += (15.0 / 180) * 3.1415
+                distance = 1.0
+            t.set_position((cos(angle) * distance, sin(angle) * distance - 0.03))
+        ax.set_title(v.display)
+    # タイトルを出力する
+    fig.text(0.05, 0.95, f"{hour}時から1時間の大阪府各地の降水予定時刻", fontdict= {
+        'family' : 'Noto Sans JP',
+        'size'   : 'x-large'
+    })
+    # 凡例を出力する
+    fig.text(0.05, 0.10, "青色", fontdict= {
+        'family' : 'Noto Sans JP'
+    }).set_color(rain.color)
+    fig.text(0.05, 0.06, "薄青色", fontdict= {
+        'family' : 'Noto Sans JP'
+    }).set_color(caution.color)
+    fig.text(0.05, 0.02, "橙色", fontdict= {
+        'family' : 'Noto Sans JP'
+    }).set_color(sunny.color)
+    fig.text(0.15, 0.10, f"雨（上空に雨雲があります）")
+    fig.text(0.15, 0.06, f"雨注意（上空に雨雲はありませんが、大阪府の3分の1を雨雲が覆っています）")
+    fig.text(0.15, 0.02, f"降雨なし（上空に雨雲はありません）")
