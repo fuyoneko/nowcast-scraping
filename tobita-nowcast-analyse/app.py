@@ -229,7 +229,7 @@ def lambda_handler(event, context):
         api = tweepy.API(auth)
 
         # グラフを作成、画像のアップロード先キーを取得する
-        media_a = execute_plot(parameter, "/tmp/place_rain.png", hour, api, figure_place_rain_circle, xlabel=False)
+        media_a = execute_plot(variable, "/tmp/place_rain.png", hour, api, figure_place_rain_circle, xlabel=False)
         media_b = execute_plot(parameter, "/tmp/area_rain.png", hour, api, figure_area_rain)
         media_c = execute_plot(parameter, "/tmp/area_histgram.png", hour, api, figure_histgram)
 
