@@ -119,7 +119,7 @@ Resources:
       Handler: app.lambdaHandler
       Runtime: nodejs14.x
       MemorySize: 1024
-      Timeout: 60
+      Timeout: 120
       Layers:
         - !Ref MyLayer
       Environment:

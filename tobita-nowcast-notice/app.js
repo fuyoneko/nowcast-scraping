@@ -3,16 +3,12 @@ const { LambdaClient, InvokeAsyncCommand } = require("@aws-sdk/client-lambda");
 const fetch = require("node-fetch");
 const Chromium = require("chrome-aws-lambda");
 const GIFEncoder = require("gifencoder");
-const PNG = require("png-js");
 const fs = require("fs");
 const { TwitterApi } = require("twitter-api-v2");
+const { CreateCapture } = require("./create-capture.js");
 
 const s3Client = new S3Client({ region: "ap-northeast-1" });
 const lambdaClient = new LambdaClient({ region: "ap-northeast-1" });
-
-const ENABLE_STATUS_UNKNOWN = 0;
-const ENABLE_STATUS_NORMAL = 1;
-const ENABLE_STATUS_RAIN = 2;
 
 class NowcastControl {
   /**
@@ -52,16 +48,19 @@ class NowcastControl {
     document.querySelector(".jmatile-map-legend-button").style.display = "none";
   }
 
-  async decodeFile(filename) {
-    return new Promise((resolve) => {
-      PNG.decode(filename, (pixel) => resolve(pixel));
-    });
-  }
-
-  async decodeBinary(binary) {
-    return new Promise((resolve) => {
-      binary.decode((pixel) => resolve(pixel));
-    });
+  async keyBoardController(page, command, optionalKey = undefined) {
+    // オプショナルキー（同時押しキーを押下する）
+    if (optionalKey !== undefined) {
+      await page.keyboard.down(optionalKey);
+    }
+    // キーを押下する
+    await page.keyboard.press(command);
+    // オプショナルキーを離す
+    if (optionalKey !== undefined) {
+      await page.keyboard.up(optionalKey);
+    }
+    // 動作完了まで待機する
+    await page.waitForTimeout(500);
   }
 
   /**
@@ -77,6 +76,7 @@ class NowcastControl {
     const clipYOffset = 214;
     const uploadMediaPath = "/tmp/exportdata.gif";
     const resultsData = [];
+    const frameList = [];
     let replyToId = "";
 
     const browser = await Chromium.puppeteer.launch({
@@ -88,8 +88,14 @@ class NowcastControl {
 
     /** パペッティアを準備する */
     try {
-      const overlayImage = await this.decodeFile("./overlay.png");
-
+      const capture = new CreateCapture(
+        viewWidth,
+        viewHeight,
+        0,
+        clipYOffset,
+        clipWidth,
+        viewHeight - clipYOffset
+      );
       const page = await browser.newPage();
       page.setUserAgent(
         "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.99 Safari/537.36"
@@ -100,18 +106,6 @@ class NowcastControl {
         deviceScaleFactor: 1,
       });
       console.log("SET VIEW PORT DONE");
-
-      // record gif
-      var encoder = new GIFEncoder(clipWidth, viewHeight - clipYOffset);
-      encoder.createWriteStream().pipe(fs.createWriteStream(uploadMediaPath));
-
-      // setting gif encoder
-      encoder.start();
-      encoder.setRepeat(0);
-      encoder.setDelay(500);
-      encoder.setQuality(10); // default
-
-      console.log("SETUP ENCODER DONE");
 
       const param = {
         zoom: process.env.ENV_JMA_ZOOM ?? "10",
@@ -139,185 +133,87 @@ class NowcastControl {
       // 読み込みが完了したら処理をする
       console.log("LOAD DONE");
       for (let i = 0; i < 12; i++) {
-        const buffer = await page.screenshot({
-          clip: {
-            x: 0,
-            y: clipYOffset,
-            width: clipWidth,
-            height: viewHeight - clipYOffset,
-          },
-        });
-        console.log(`GET BUFFER ${i}`);
-        // ---------------
-        const png = await this.decodeBinary(new PNG(buffer));
-        const clipHeight = viewWidth - clipYOffset;
-
-        // -------------
-
-        const fill = {
-          minX: 10,
-          minY: 90,
-          maxX: clipWidth - 10,
-          maxY: viewHeight - clipYOffset - 35,
-        };
-        const clip = {
-          w: 8,
-          h: 8,
-        };
-        const colorChart = [
-          0xf5f5ff, 0xb8ddff, 0x58a9ff, 0x4070ff, 0xfff740, 0xffb240, 0xff5e40,
-          0xc7408e,
-        ];
-        const positionToIndex = (x, y) => {
-          // XYをインデックスに変換する
-          let idx = x * 4;
-          idx += clipWidth * 4 * y;
-          return idx;
-        };
-        const findChartIndex = (chart, r, g, b) => {
-          if (r <= 60 && g <= 60 && b <= 60) {
-            return {
-              enabled: ENABLE_STATUS_UNKNOWN,
-              weight: 0,
-              index: "-1",
-            };
-          }
-          const cdelta = Math.max(r, g, b) - Math.min(r, g, b);
-          let index = -1;
-          if (cdelta >= 8) {
-            let lenMin = Number.MAX_VALUE;
-            for (const idx in chart) {
-              const c = chart[idx];
-              const cr = (c >>> 16) & 0xff;
-              const cg = (c >>> 8) & 0xff;
-              const cb = c & 0xff;
-              const len =
-                Math.pow(r - cr, 2) + Math.pow(b - cb, 2) + Math.pow(g - cg, 2);
-              if (lenMin > len) {
-                lenMin = len;
-                index = idx;
-              }
-            }
-          }
-          return {
-            enabled: index != -1 ? ENABLE_STATUS_RAIN : ENABLE_STATUS_NORMAL,
-            weight: index != -1 ? 1 : 0,
-            index: `${index}`,
-          };
-        };
-        const colorList = [];
-        const indexList = {};
-        const placeStatusList = {};
-        for (const idx in colorChart) {
-          indexList[`${idx}`] = 0;
-        }
-        // 評価座標の色を取得する
-        for (let x = fill.minX; x < fill.maxX; x += clip.w) {
-          for (let y = fill.minY; y < fill.maxY; y += clip.h) {
-            // XYをインデックスに変換する
-            const idx = positionToIndex(x + clip.w / 2, y + clip.h / 2);
-            // 評価点の色を取得する
-            const colorIndex = findChartIndex(
-              colorChart,
-              png[idx],
-              png[idx + 1],
-              png[idx + 2]
-            );
-            if (colorIndex.enabled != ENABLE_STATUS_UNKNOWN) {
-              colorList.push(colorIndex.weight);
-              if (colorIndex.enabled == ENABLE_STATUS_RAIN) {
-                if (colorIndex.index in indexList) {
-                  indexList[colorIndex.index] += 1;
-                }
-              }
-            }
-          }
-        }
-        const sum = colorList.reduce((p, c) => p + c);
-        let density = new Number(0);
-        if (colorList.length >= 1) {
-          density = new Number(sum / colorList.length);
-        }
-        // 評価地点の色を取得する
-        const targetPlace = [
-          {
-            key: "tobita",
-            x: 375,
-            y: 262,
-          },
-          {
-            key: "umeda",
-            x: 372,
-            y: 212,
-          },
-          {
-            key: "kadoma",
-            x: 236,
-            y: 177,
-          },
-          {
-            key: "sakai",
-            x: 360,
-            y: 325,
-          },
-          {
-            key: "yao",
-            x: 447,
-            y: 278,
-          },
-          {
-            key: "kanku",
-            x: 180,
-            y: 447,
-          },
-        ];
-
-        for (const placeInfo of targetPlace) {
-          // XYをインデックスに変換する
-          const idx = positionToIndex(placeInfo.x, placeInfo.y);
-          // 評価点の色を取得する
-          const colorIndex = findChartIndex(
-            colorChart,
-            png[idx],
-            png[idx + 1],
-            png[idx + 2]
-          );
-          placeStatusList[placeInfo.key] = {
-            basement: new Number(
-              70.0 * colorIndex.weight + 30.0 * density
-            ).toFixed(2),
-            index: colorIndex.index,
-          };
-        }
-
-        // -----------------
-        resultsData.push({
-          density: new Number(density * 100).toFixed(2),
-          histgram: indexList,
-          place: placeStatusList,
-        });
-
-        // -----------------
-
-        for (let x = 0; x < clipWidth; x++) {
-          for (let y = 0; y < clipHeight; y++) {
-            let idx = x * 4;
-            idx += y * clipWidth * 4;
-            if (overlayImage[idx + 3] > 10) {
-              png[idx] = overlayImage[idx];
-              png[idx + 1] = overlayImage[idx + 1];
-              png[idx + 2] = overlayImage[idx + 2];
-            }
-          }
-        }
-        encoder.addFrame(png);
-        // --------------
-        await page.keyboard.down("Shift");
-        await page.keyboard.press("ArrowRight");
-        await page.keyboard.up("Shift");
-        await page.waitForTimeout(500);
+        // 1時間分のキャプチャを取得する
+        const pngCaptureImage = await capture.createCurrentScreenshot(page);
+        // フレーム一覧に登録する
+        frameList.push(pngCaptureImage);
+        // キャプチャの画像解析結果を取得する
+        resultsData.push(capture.parseData(pngCaptureImage));
+        // 画面遷移：次の5分を取得する
+        await this.keyBoardController(page, "ArrowRight", "Shift");
       }
-      encoder.finish();
+      // 画面遷移：次の5分を取得する
+      await this.keyBoardController(page, "Enter", "Shift");
+
+      // マウスを移動する
+      page.mouse.move(200, 400);
+      // 動作完了まで待機する
+      await page.waitForTimeout(100);
+
+      // 画面遷移：ズームアウトする
+      for (let i = 0; i < 4; i++) {
+        await this.keyBoardController(page, "NumpadSubtract");
+      }
+
+      const thumbnail = new CreateCapture(
+        viewWidth,
+        viewHeight,
+        240,
+        400,
+        200,
+        180
+      );
+      // サムネイルを取得、画像の左上隅にかぶせる
+      for (let i = 0; i < 12; i++) {
+        // サムネイルを取得する
+        const pngCaptureImage = await thumbnail.createCurrentScreenshot(page);
+        // 画像をかぶせる
+        capture.pilingImage(
+          frameList[i],
+          pngCaptureImage,
+          4,
+          thumbnail.clipWidth,
+          thumbnail.clipHeight,
+          capture.clipWidth
+        );
+        // 画面遷移：次の5分を取得する
+        await this.keyBoardController(page, "ArrowRight", "Shift");
+      }
+
+      if (frameList && frameList.length >= 1) {
+        console.log("ADD LEGEND START");
+        // 凡例画像を取得する
+        const overlayImage = await CreateCapture.decodeFile("./overlay.png");
+        // record gif
+        const encoder = new GIFEncoder(clipWidth, viewHeight - clipYOffset);
+        const writeBuffer = fs.createWriteStream(uploadMediaPath);
+        encoder.createWriteStream().pipe(writeBuffer);
+
+        // setting gif encoder
+        encoder.start();
+        encoder.setRepeat(0);
+        encoder.setDelay(500);
+        encoder.setQuality(10); // default
+
+        for (const frame of frameList) {
+          // 画像の上に凡例画像を重ねる
+          capture.pilingImage(frame, overlayImage);
+          // GIFのフレームに追加する
+          encoder.addFrame(frame);
+        }
+        encoder.finish();
+        for (let i = 0; i < 10; i++) {
+          await page.waitForTimeout(60);
+          if (fs.statSync(uploadMediaPath).size != 0) {
+            console.log("CHECKING ...");
+            i = 10;
+          }
+        }
+      }
+
+      // ファイルサイズを出力する
+      console.log("FILE SIZE");
+      console.log(fs.statSync(uploadMediaPath).size);
 
       // Instantiate with desired auth type (here's Bearer v2 auth)
       const twitterClient = new TwitterApi({
