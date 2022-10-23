@@ -152,8 +152,12 @@ class NowcastControl {
 
       // 画面遷移：ズームアウトする
       for (let i = 0; i < 4; i++) {
+        const hash = await page.evaluate(() => location.hash);
         await this.keyBoardController(page, "NumpadSubtract");
+        await page.waitForFunction(`location.hash != "${hash}"`);
       }
+      // 動作完了まで待機する
+      await page.waitForTimeout(100);
 
       const thumbnail = new CreateCapture(
         viewWidth,
@@ -189,6 +193,22 @@ class NowcastControl {
         const writeBuffer = fs.createWriteStream(uploadMediaPath);
         encoder.createWriteStream().pipe(writeBuffer);
 
+        // 書き込み処理タイムアウト
+        // 監視対象パスのファイルサイズが変わったのであれば次に進む
+        // 1200ミリ秒が経過した場合も次に進む
+        let fileSizeStatus = 0;
+        const waitingForWrite = async (targetFilePath, requiredSize) => {
+          for (let i = 0; i < 20; i++) {
+            await page.waitForTimeout(60);
+            const currentFileSize = fs.statSync(targetFilePath).size;
+            if (currentFileSize != requiredSize) {
+              // ファイルの更新を検知できたのであれば、待機処理を中断する
+              return currentFileSize;
+            }
+          }
+          return requiredSize;
+        };
+
         // setting gif encoder
         encoder.start();
         encoder.setRepeat(0);
@@ -200,20 +220,21 @@ class NowcastControl {
           capture.pilingImage(frame, overlayImage);
           // GIFのフレームに追加する
           encoder.addFrame(frame);
+          // 書き込み処理の完了を待機する
+          fileSizeStatus = await waitingForWrite(
+            uploadMediaPath,
+            fileSizeStatus
+          );
         }
         encoder.finish();
-        for (let i = 0; i < 10; i++) {
-          await page.waitForTimeout(60);
-          if (fs.statSync(uploadMediaPath).size != 0) {
-            console.log("CHECKING ...");
-            i = 10;
-          }
-        }
+        // 書き込み処理の完了を待機する
+        fileSizeStatus = await waitingForWrite(uploadMediaPath, fileSizeStatus);
       }
 
       // ファイルサイズを出力する
-      console.log("FILE SIZE");
-      console.log(fs.statSync(uploadMediaPath).size);
+      console.log(`FILE SIZE -> ${fileSizeStatus}`);
+      // 動作完了まで待機する
+      await page.waitForTimeout(100);
 
       // Instantiate with desired auth type (here's Bearer v2 auth)
       const twitterClient = new TwitterApi({

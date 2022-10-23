@@ -12,6 +12,9 @@ class CreateCapture {
   targetPlace = [];
   colorChart = [];
 
+  /**
+   * PNGファイルをデコードする
+   */
   static async decodeFile(filename) {
     return new Promise((resolve) => {
       PNG.decode(filename, (pixel) => resolve(pixel));
@@ -79,12 +82,18 @@ class CreateCapture {
     ];
   }
 
+  /**
+   * PNG形式のバイナリデータをデコードする
+   */
   async decodeBinary(binary) {
     return new Promise((resolve) => {
       binary.decode((pixel) => resolve(pixel));
     });
   }
 
+  /**
+   * 現在のスクリーンショットを取得する
+   */
   async createCurrentScreenshot(page) {
     const buffer = await page.screenshot({
       clip: {
@@ -99,6 +108,9 @@ class CreateCapture {
     return png;
   }
 
+  /**
+   * XYの座標位置をピクセル位置に変換する
+   */
   positionToIndex(x, y, bytesPerPixel = 4) {
     // XYをインデックスに変換する
     let idx = x * bytesPerPixel;
@@ -106,6 +118,9 @@ class CreateCapture {
     return idx;
   }
 
+  /**
+   * チャートデータ中の雨状態を取得する
+   */
   findChartIndex(chart, r, g, b) {
     if (r <= 60 && g <= 60 && b <= 60) {
       return {
@@ -138,6 +153,9 @@ class CreateCapture {
     };
   }
 
+  /**
+   * 複数枚の画像を重ねて合成する
+   */
   pilingImage(
     png,
     overlayImage,
@@ -174,6 +192,9 @@ class CreateCapture {
     }
   }
 
+  /**
+   * 画像データを解析後JSONデータに変換する
+   */
   parseData(png, left = 10, right = 10, top = 90, bottom = 35, clipSize = 8) {
     const fill = {
       minX: left,
