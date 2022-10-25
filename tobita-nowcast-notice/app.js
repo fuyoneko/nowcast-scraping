@@ -208,6 +208,25 @@ class NowcastControl {
           }
           return requiredSize;
         };
+        // ファイルの読み込み可否の確認
+        const tryToRead = (targetFilePath) => {
+          try {
+            fs.accessSync(targetFilePath, fs.constants.R_OK);
+            return true;
+          } catch {
+            return false;
+          }
+        };
+        // 読み込み可能待機処理
+        // 読み込みできる状態になれば続行する
+        const waitingForReadable = async (targetFilePath) => {
+          for (let i = 0; i < 50; i++) {
+            await page.waitForTimeout(100);
+            if (tryToRead(targetFilePath)) {
+              return;
+            }
+          }
+        };
 
         // setting gif encoder
         encoder.start();
@@ -229,12 +248,12 @@ class NowcastControl {
         encoder.finish();
         // 書き込み処理の完了を待機する
         fileSizeStatus = await waitingForWrite(uploadMediaPath, fileSizeStatus);
-      }
+        // ファイルサイズを出力する
+        console.log(`FILE SIZE -> ${fileSizeStatus}`);
 
-      // ファイルサイズを出力する
-      console.log(`FILE SIZE -> ${fileSizeStatus}`);
-      // 動作完了まで待機する
-      await page.waitForTimeout(100);
+        // 動作完了まで待機する
+        await waitingForReadable(uploadMediaPath);
+      }
 
       // Instantiate with desired auth type (here's Bearer v2 auth)
       const twitterClient = new TwitterApi({
