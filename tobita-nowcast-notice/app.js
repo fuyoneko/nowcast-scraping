@@ -43,9 +43,16 @@ class NowcastControl {
     }`;
     document.getElementsByTagName("head")[0].appendChild(style);
 
-    document.querySelector(".leaflet-top.leaflet-left").style.display = "none";
-    document.querySelector(".jmatile-map-legend").style.display = "none";
-    document.querySelector(".jmatile-map-legend-button").style.display = "none";
+    try {
+      document.querySelector(".leaflet-top.leaflet-left").style.display =
+        "none";
+      document.querySelector(".jmatile-map-legend").style.display = "none";
+      document.querySelector(".jmatile-map-legend-button").style.display =
+        "none";
+      document.querySelector(".jmatile-message").style.display = "none";
+    } catch {
+      console.log("failed");
+    }
   }
 
   async keyBoardController(page, command, optionalKey = undefined) {
