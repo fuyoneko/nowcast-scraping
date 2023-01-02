@@ -1,8 +1,6 @@
 import { WeatherControll } from "./weather-service/weather-control.js";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
-const s3Client = new S3Client({ region: "ap-northeast-1" });
-
 async function putRecordsToR2(response) {
   const r2Client = new S3Client({
     region: "auto",
@@ -25,18 +23,11 @@ export const lambdaHandler = async (event) => {
   try {
     console.log("START METHOD");
     const response = await WeatherControll.waitForForecast();
-    const params = {
-      Bucket: process.env.BUCKET_NAME,
-      Key: "current-forecast.json",
-      Body: JSON.stringify(response),
-    };
-    console.log(params);
+    console.log(JSON.stringify(response));
 
-    const data = await s3Client.send(new PutObjectCommand(params));
+    const data = await putRecordsToR2(response);
     console.log(data);
     console.log("END METHOD");
-
-    await putRecordsToR2(response);
 
     result = {
       statusCode: 200,

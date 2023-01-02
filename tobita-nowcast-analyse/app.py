@@ -267,15 +267,14 @@ def lambda_handler(event, context):
             ]
         )
 
-        # S3に分析データをアップロードする
-        s3_client =  boto3.resource("s3")
-        s3_bucket = s3_client.Bucket(environ.get("BUCKET_NAME"))
+        # 分析データをアップロードする
         json_data = {
             "hour": hour,
             "tobita_max": tobita_max,
             "tobita_pops": tobita_clouds
         }
 
+        # R2にデータを送信する
         r2_session = boto3.Session(
             region_name="auto",
             aws_access_key_id=environ.get("ENV_R2_ACCESS_KEY_ID", ""),
@@ -284,10 +283,6 @@ def lambda_handler(event, context):
         r2_client = r2_session.resource("s3", endpoint_url=environ.get("ENV_R2_ENDPOINT", ""))
         r2_bucket = r2_client.Bucket(environ.get("R2_BUCKET_NAME"))
 
-        # データを出力する
-        with io.BytesIO(json.dumps(json_data).encode("utf-8")) as fp:
-            s3_bucket.upload_fileobj(fp, "analyse_weather.json")
-            
         with io.BytesIO(json.dumps(json_data).encode("utf-8")) as fp:
             r2_bucket.upload_fileobj(fp, "analyse_weather.json")
 

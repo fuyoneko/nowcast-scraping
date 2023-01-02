@@ -6,8 +6,6 @@ const GIFEncoder = require("gifencoder");
 const fs = require("fs");
 const { TwitterApi } = require("twitter-api-v2");
 const { CreateCapture } = require("./create-capture.js");
-
-const s3Client = new S3Client({ region: "ap-northeast-1" });
 const lambdaClient = new LambdaClient({ region: "ap-northeast-1" });
 
 async function getRecordsFromR2() {
@@ -323,7 +321,6 @@ exports.lambdaHandler = async function (event, context) {
 
   try {
     let template = "";
-    // const data = await s3Client.send(new GetObjectCommand(params));
     const data = await getRecordsFromR2();
     if (data.Body) {
       const response = new fetch.Response(data.Body);
