@@ -6,9 +6,6 @@ Description: >
   Sample SAM Template for tobita-weather-sam-application
 
 Parameters:
-  BucketTargetName:
-    Description: Type of this BacketName.
-    Type: String
   AnalyseLambdaFunctionName:
     Description: Type of this BacketName.
     Type: String
@@ -73,34 +70,6 @@ Globals:
         ENV_R2_SECRET_KEY: !Sub ${R2SecretKey}
 
 Resources:
-  S3Bucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub ${BucketTargetName}
-      AccessControl: Private
-      CorsConfiguration:
-        CorsRules:
-          - AllowedHeaders:
-              - "*"
-            AllowedMethods:
-              - "GET"
-            AllowedOrigins:
-              - "https://tobitamap.pages.dev"
-              - "http://localhost:5173"
-              - "https://tobitamap.pages.dev/*"
-              - "http://localhost:5173/*"
-  S3BucketPolicy:
-    Type: "AWS::S3::BucketPolicy"
-    Properties:
-      Bucket: !Ref S3Bucket
-      PolicyDocument:
-        Statement:
-          Action:
-            - "s3:GetObject"
-          Effect: "Allow"
-          Resource: !Sub "arn:aws:s3:::${BucketTargetName}/*"
-          Principal: "*"
-
   WeatherCollectorFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -109,11 +78,7 @@ Resources:
       Runtime: nodejs14.x
       Environment:
         Variables:
-          BUCKET_NAME: !Sub ${BucketTargetName}
           R2_BUCKET_NAME: !Sub ${R2BucketTargetName}
-      Policies:
-        - S3FullAccessPolicy:
-            BucketName: !Sub ${BucketTargetName}
       Events:
         ScheduleExecute:
           Type: Schedule
@@ -140,12 +105,9 @@ Resources:
         - !Ref MyLayer
       Environment:
         Variables:
-          BUCKET_NAME: !Sub ${BucketTargetName}
           R2_BUCKET_NAME: !Sub ${R2BucketTargetName}
           ANALYSE_FUNCTION_NAME: !Sub ${AnalyseLambdaFunctionName}
       Policies:
-        - S3FullAccessPolicy:
-            BucketName: !Sub ${BucketTargetName}
         - LambdaInvokePolicy:
             FunctionName: !Sub ${AnalyseLambdaFunctionName}
       Events:
@@ -167,8 +129,4 @@ Resources:
         - arn:aws:lambda:ap-northeast-1:770693421928:layer:Klayers-p38-matplotlib:10
       Environment:
         Variables:
-          BUCKET_NAME: !Sub ${BucketTargetName}
           R2_BUCKET_NAME: !Sub ${R2BucketTargetName}
-      Policies:
-        - S3FullAccessPolicy:
-            BucketName: !Sub ${BucketTargetName}
