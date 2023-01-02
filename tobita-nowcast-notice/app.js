@@ -10,6 +10,22 @@ const { CreateCapture } = require("./create-capture.js");
 const s3Client = new S3Client({ region: "ap-northeast-1" });
 const lambdaClient = new LambdaClient({ region: "ap-northeast-1" });
 
+async function getRecordsFromR2() {
+  const r2Client = new S3Client({
+    region: "auto",
+    endpoint: process.env.ENV_R2_ENDPOINT,
+    credentials: {
+      accessKeyId: process.env.ENV_R2_ACCESS_KEY_ID,
+      secretAccessKey: process.env.ENV_R2_SECRET_KEY,
+    },
+  });
+  const params = {
+    Bucket: process.env.R2_BUCKET_NAME,
+    Key: "current-forecast.json",
+  };
+  return await r2Client.send(new GetObjectCommand(params));
+}
+
 class NowcastControl {
   /**
    * サービスのフォントをWebフォントに変更する
@@ -307,7 +323,8 @@ exports.lambdaHandler = async function (event, context) {
 
   try {
     let template = "";
-    const data = await s3Client.send(new GetObjectCommand(params));
+    // const data = await s3Client.send(new GetObjectCommand(params));
+    const data = await getRecordsFromR2();
     if (data.Body) {
       const response = new fetch.Response(data.Body);
       const json = await response.json();

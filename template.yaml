@@ -40,6 +40,18 @@ Parameters:
   JmaElements:
     Description: Type of this BacketName.
     Type: String
+  R2BucketTargetName:
+    Description: Type of this BacketName.
+    Type: String
+  R2Endpoint:
+    Description: Type of this BacketName.
+    Type: String
+  R2AccessKeyId:
+    Description: Type of this BacketName.
+    Type: String
+  R2SecretKey:
+    Description: Type of this BacketName.
+    Type: String
 
 Globals:
   Function:
@@ -56,6 +68,9 @@ Globals:
         ENV_JMA_LON: !Sub ${JmaLon}
         ENV_JMA_COLORDEPTH: !Sub ${JmaColorDepth}
         ENV_JMA_ELEMENTS: !Sub ${JmaElements}
+        ENV_R2_ENDPOINT: !Sub ${R2Endpoint}
+        ENV_R2_ACCESS_KEY_ID: !Sub ${R2AccessKeyId}
+        ENV_R2_SECRET_KEY: !Sub ${R2SecretKey}
 
 Resources:
   S3Bucket:
@@ -95,6 +110,7 @@ Resources:
       Environment:
         Variables:
           BUCKET_NAME: !Sub ${BucketTargetName}
+          R2_BUCKET_NAME: !Sub ${R2BucketTargetName}
       Policies:
         - S3FullAccessPolicy:
             BucketName: !Sub ${BucketTargetName}
@@ -125,6 +141,7 @@ Resources:
       Environment:
         Variables:
           BUCKET_NAME: !Sub ${BucketTargetName}
+          R2_BUCKET_NAME: !Sub ${R2BucketTargetName}
           ANALYSE_FUNCTION_NAME: !Sub ${AnalyseLambdaFunctionName}
       Policies:
         - S3FullAccessPolicy:
@@ -151,6 +168,7 @@ Resources:
       Environment:
         Variables:
           BUCKET_NAME: !Sub ${BucketTargetName}
+          R2_BUCKET_NAME: !Sub ${R2BucketTargetName}
       Policies:
         - S3FullAccessPolicy:
             BucketName: !Sub ${BucketTargetName}

@@ -276,9 +276,20 @@ def lambda_handler(event, context):
             "tobita_pops": tobita_clouds
         }
 
+        r2_session = boto3.Session(
+            region_name="auto",
+            aws_access_key_id=environ.get("ENV_R2_ACCESS_KEY_ID", ""),
+            aws_secret_access_key=environ.get("ENV_R2_SECRET_KEY", ""),
+        )
+        r2_client = r2_session.resource("s3", endpoint_url=environ.get("ENV_R2_ENDPOINT", ""))
+        r2_bucket = r2_client.Bucket(environ.get("R2_BUCKET_NAME"))
+
         # データを出力する
         with io.BytesIO(json.dumps(json_data).encode("utf-8")) as fp:
             s3_bucket.upload_fileobj(fp, "analyse_weather.json")
+            
+        with io.BytesIO(json.dumps(json_data).encode("utf-8")) as fp:
+            r2_bucket.upload_fileobj(fp, "analyse_weather.json")
 
         return {
             "statusCode": 200
