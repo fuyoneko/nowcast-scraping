@@ -241,7 +241,7 @@ def lambda_handler(event, context):
         tobita_clouds = []
         if total_densities == 0.0:
             # 降水がないのであれば、それを表示する
-            tweet_text = "雨雲はありません。出典:気象庁（https://www.jma.go.jp/）のナウキャストデータを解析しています。"
+            tweet_text = "雨雲はありません。出典:気象庁のナウキャストデータを解析しています。"
             tobita_clouds = [
                 0.0, 0.0, 0.0, 0.0, 0,0, 
                 0.0, 0.0, 0.0, 0.0, 0.0,
@@ -253,7 +253,7 @@ def lambda_handler(event, context):
             tobita_max = tobita_info.max
             tobita_clouds = tobita_info.pops
             densities_max = max(densities)
-            tweet_text = f"今後1時間で飛田に雨が降る確率は{tobita_max}%、雨雲は画面の{densities_max}%を占有しています。出典:気象庁（https://www.jma.go.jp/）のナウキャストデータを解析しています。"
+            tweet_text = f"今後1時間で飛田に雨が降る確率は{tobita_max}%、雨雲は画面の{densities_max}%を占有しています。出典:気象庁のナウキャストデータを解析しています。"
 
         # ツイートする
         # ツイートはリプライとしてぶら下げる
