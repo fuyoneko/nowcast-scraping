@@ -129,6 +129,9 @@ export class WeatherControll {
       });
     if (targetKeys.length >= 1) {
       const currentData = response[targetKeys[0]];
+      if (currentData.pops === undefined) {
+        currentData.pops = "-";
+      }
       result["summary"] = {
         code: WeatherVendorKishoChoForecast.weatherCodeToWeatherIcon(
           currentData.weatherCodes.value

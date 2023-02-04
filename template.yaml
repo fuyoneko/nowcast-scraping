@@ -79,6 +79,8 @@ Resources:
       Environment:
         Variables:
           R2_BUCKET_NAME: !Sub ${R2BucketTargetName}
+      Policies:
+        - CloudWatchPutMetricPolicy: {}
       Events:
         ScheduleExecute:
           Type: Schedule
