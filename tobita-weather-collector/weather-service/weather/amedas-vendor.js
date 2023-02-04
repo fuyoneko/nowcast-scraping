@@ -29,14 +29,21 @@ export class AmedasVendor extends WeatherVendor {
     if (indexKey.length != 14) {
       return "-";
     }
+    const year = indexKey.substring(0, 4);
+    const month = indexKey.substring(4, 6);
+    const day = indexKey.substring(6, 8);
     const hour = indexKey.substring(8, 10);
     const minutes = indexKey.substring(10, 12);
     const seconds = indexKey.substring(12, 14);
     return {
+      year: year,
+      month: month,
+      day: day,
       hour: hour,
       minutes: minutes,
       seconds: seconds,
       time: `${hour}:${minutes}`,
+      iso: `${year}-${month}-${day} ${hour}:${minutes}:${seconds}`,
     };
   }
   parse(data, map) {
@@ -48,6 +55,8 @@ export class AmedasVendor extends WeatherVendor {
     const timeFormatString = this.indexKeyToTimeFormat(latestIndex);
     for (const key of Object.keys(map)) {
       map[key]["amedas"] = {
+        // ISO計測日時
+        date: timeFormatString.iso,
         // 計測時間
         time: timeFormatString.time,
         // 気温

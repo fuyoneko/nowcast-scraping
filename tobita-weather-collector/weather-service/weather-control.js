@@ -113,6 +113,7 @@ export class WeatherControll {
     const result = {
       summary: {},
       current: {},
+      raw: {},
       future: [],
     };
     const keys = Object.keys(response);
@@ -144,12 +145,25 @@ export class WeatherControll {
         weathers: currentData.weathers.value,
         pops: `降水確率 ${currentData.pops.value}％`,
         temp: `気温 ${currentData.amedas.temp}℃`,
-        pressure: `気圧 ${currentData.amedas.pressure}hpa`,
+        pressure: `気圧 ${currentData.amedas.pressure}hPa`,
         humidity: `湿度 ${currentData.amedas.humidity}％`,
         wind: `風速 ${currentData.amedas.wind}m/s`,
         precipitation: {
           day: `日間降水量 ${currentData.amedas.precipitation.day}mm`,
           hour: `時間降水量 ${currentData.amedas.precipitation.hour}mm`,
+        },
+      };
+      result["raw"] = {
+        date: currentData.amedas.date,
+        weathers: currentData.weathers.value,
+        pops: currentData.pops.value,
+        temp: currentData.amedas.temp,
+        pressure: currentData.amedas.pressure,
+        humidity: currentData.amedas.humidity,
+        wind: currentData.amedas.wind,
+        precipitation: {
+          day: currentData.amedas.precipitation.day,
+          hour: currentData.amedas.precipitation.hour,
         },
       };
     }

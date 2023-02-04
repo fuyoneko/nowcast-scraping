@@ -1,4 +1,5 @@
 const { S3Client, GetObjectCommand } = require("@aws-sdk/client-s3");
+const { Upload } = require("@aws-sdk/lib-storage");
 const { LambdaClient, InvokeAsyncCommand } = require("@aws-sdk/client-lambda");
 const fetch = require("node-fetch");
 const Chromium = require("chrome-aws-lambda");
@@ -22,6 +23,27 @@ async function getRecordsFromR2() {
     Key: "current-forecast.json",
   };
   return await r2Client.send(new GetObjectCommand(params));
+}
+
+async function putRecordsToR2(gifStream) {
+  const r2Client = new S3Client({
+    region: "auto",
+    endpoint: process.env.ENV_R2_ENDPOINT,
+    credentials: {
+      accessKeyId: process.env.ENV_R2_ACCESS_KEY_ID,
+      secretAccessKey: process.env.ENV_R2_SECRET_KEY,
+    },
+  });
+
+  const upload = new Upload({
+    client: r2Client,
+    params: {
+      Bucket: process.env.R2_BUCKET_NAME,
+      Key: "nowcast.gif",
+      Body: gifStream,
+    },
+  });
+  await upload.done();
 }
 
 class NowcastControl {
@@ -87,7 +109,7 @@ class NowcastControl {
   /**
    * 処理を実施する
    */
-  async main(template) {
+  async main(template, event) {
     console.log("START");
     console.log(template);
 
@@ -276,23 +298,30 @@ class NowcastControl {
         await waitingForReadable(uploadMediaPath);
       }
 
-      // Instantiate with desired auth type (here's Bearer v2 auth)
-      const twitterClient = new TwitterApi({
-        appKey: process.env.ENV_TWITTER_APP_KEY ?? "",
-        appSecret: process.env.ENV_TWITTER_APP_SECRET ?? "",
-        accessToken: process.env.ENV_TWITTER_ACCESS_TOKEN ?? "",
-        accessSecret: process.env.ENV_TWITTER_ACCESS_SECRET ?? "",
-      });
+      if ("quietToTwitter" in event) {
+        // Twitterへの投稿を抑制する
+        console.log("Quiet");
+      } else {
+        // Instantiate with desired auth type (here's Bearer v2 auth)
+        const twitterClient = new TwitterApi({
+          appKey: process.env.ENV_TWITTER_APP_KEY ?? "",
+          appSecret: process.env.ENV_TWITTER_APP_SECRET ?? "",
+          accessToken: process.env.ENV_TWITTER_ACCESS_TOKEN ?? "",
+          accessSecret: process.env.ENV_TWITTER_ACCESS_SECRET ?? "",
+        });
 
-      // You can upload media easily!
-      const mediaId = await twitterClient.v1.uploadMedia(uploadMediaPath);
-      // Play with the built in methods
-      const result = await twitterClient.v1.tweet(template, {
-        media_ids: [mediaId],
-      });
-      // Send
-      console.log(result.id_str);
-      replyToId = result.id_str;
+        // You can upload media easily!
+        const mediaId = await twitterClient.v1.uploadMedia(uploadMediaPath);
+        // Play with the built in methods
+        const result = await twitterClient.v1.tweet(template, {
+          media_ids: [mediaId],
+        });
+        // Send
+        console.log(result.id_str);
+        replyToId = result.id_str;
+      }
+      // Save To R2
+      await putRecordsToR2(fs.createReadStream(uploadMediaPath));
       // Done
       console.log("DONE");
     } catch (err) {
@@ -310,15 +339,6 @@ class NowcastControl {
 }
 
 exports.lambdaHandler = async function (event, context) {
-  let bucketName = process.env.BUCKET_NAME;
-  if (!bucketName) {
-    bucketName = "prod-tobitamap-weather-info-resource";
-  }
-  const params = {
-    Bucket: bucketName,
-    Key: "current-forecast.json",
-  };
-
   try {
     let template = "";
     const data = await getRecordsFromR2();
@@ -336,8 +356,14 @@ exports.lambdaHandler = async function (event, context) {
       template = "今後1時間の雨雲の予想です。";
     }
 
+    console.log("START");
+    console.log(event);
+
     const control = new NowcastControl();
-    const resultData = await control.main(template);
+    const resultData = await control.main(template, event);
+    if (resultData.replyTo.length == 0) {
+      return;
+    }
 
     const command = new InvokeAsyncCommand({
       FunctionName: process.env.ANALYSE_FUNCTION_NAME,

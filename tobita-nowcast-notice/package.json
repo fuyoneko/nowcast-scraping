@@ -7,13 +7,14 @@
   "author": "SAM CLI",
   "license": "MIT",
   "dependencies": {
-    "node-fetch": "^2.6.7",
-    "typescript": "^4.8.3",
-    "@aws-sdk/client-s3": "^3.32.0",
     "@aws-sdk/client-lambda": "^3.16.0",
+    "@aws-sdk/client-s3": "^3.32.0",
+    "@aws-sdk/lib-storage": "^3.264.0",
     "gifencoder": "^2.0.1",
+    "node-fetch": "^2.6.7",
     "png-js": "^1.0.0",
-    "twitter-api-v2": "^1.12.7"
+    "twitter-api-v2": "^1.12.7",
+    "typescript": "^4.8.3"
   },
   "scripts": {
     "test": "mocha tests/unit/"

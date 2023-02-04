@@ -84,6 +84,10 @@ Resources:
           Type: Schedule
           Properties:
             Schedule: cron(0/10 * * * ? *)
+            Input: |
+              { 
+                "method": "weather-collector" 
+              }
 
   MyLayer:
     Type: AWS::Serverless::LayerVersion
@@ -115,6 +119,10 @@ Resources:
           Type: Schedule
           Properties:
             Schedule: cron(0 * * * ? *)
+            Input: |
+              { 
+                "method": "nowcast-notice" 
+              }
 
   NowcastAnalyse:
     Type: AWS::Serverless::Function
